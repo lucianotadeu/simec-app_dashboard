@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Dados Abertos TI · SIMEC</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <!-- Chart.js via CDN (leve, ~60KB gzip) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Dashboard específico ──────────────────────────────── */
+    .dash-header {
+      background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+      border-bottom: 1px solid #30363d;
+      padding: 1.5rem 0 1rem;
+      margin-bottom: 2rem;
+    }
+    .dash-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #f0f6fc;
+      margin-bottom: 0.25rem;
+    }
+    .dash-subtitle {
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+    .dash-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .dash-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(56,139,253,0.12);
+      color: #58a6ff;
+      border: 1px solid rgba(56,139,253,0.3);
+    }
+    .dash-badge.green { background: rgba(63,185,80,0.12); color: #3fb950; border-color: rgba(63,185,80,0.3); }
+    .dash-badge.gold  { background: rgba(210,153,34,0.12); color: #d2993a; border-color: rgba(210,153,34,0.3); }
+
+    /* ── KPI Cards ─────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .kpi-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 1.1rem 1.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--kpi-color, #58a6ff);
+    }
+    .kpi-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--kpi-color, #f0f6fc);
+      line-height: 1;
+      margin-bottom: 0.35rem;
+    }
+    .kpi-label {
+      font-size: 0.78rem;
+      color: #8b949e;
+      font-weight: 500;
+    }
+    .kpi-icon {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 2rem;
+      opacity: 0.18;
+    }
+
+    /* ── Chart grid ─────────────────────────────────────────── */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .chart-grid.full { grid-template-columns: 1fr; }
+    .chart-grid.trio { grid-template-columns: 1fr 1fr 1fr; }
+
+    .chart-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .chart-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .chart-card-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #f0f6fc;
+    }
+    .chart-card-sub {
+      font-size: 0.75rem;
+      color: #8b949e;
+      margin-top: 0.2rem;
+    }
+    .chart-source {
+      font-size: 0.7rem;
+      color: #484f58;
+      text-align: right;
+    }
+    .chart-wrap {
+      position: relative;
+    }
+    .chart-wrap canvas {
+      max-height: 300px;
+    }
+
+    /* ── Tabela de dados ──────────────────────────────────── */
+    .data-section {
+      margin-top: 2rem;
+    }
+    .data-section h2 {
+      font-size: 1.1rem;
+      color: #58a6ff;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Filtros e controles ──────────────────────────────── */
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .ctrl-btn {
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #8b949e;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ctrl-btn:hover, .ctrl-btn.active {
+      border-color: #58a6ff;
+      color: #58a6ff;
+      background: rgba(56,139,253,0.08);
+    }
+    .ctrl-btn.danger { border-color: #f78166; color: #f78166; }
+    .ctrl-btn.danger:hover { background: rgba(247,129,102,0.08); }
+
+    /* ── Nota metodológica ───────────────────────────────── */
+    .nota-metodologica {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-top: 2rem;
+      font-size: 0.8rem;
+      color: #8b949e;
+      line-height: 1.6;
+    }
+    .nota-metodologica strong { color: #f0f6fc; }
+
+    @media (max-width: 700px) {
+      .chart-grid { grid-template-columns: 1fr; }
+      .chart-grid.trio { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <!-- HEADER DO DASHBOARD -->
+  <div class="dash-header">
+    <div class="container">
+      <div class="dash-title">📊 Dashboard — Educação em TI no Brasil</div>
+      <div class="dash-subtitle">Análise de dados massivos com fontes abertas do Governo Federal</div>
+      <div class="dash-meta">
+        <span class="dash-badge">🏛️ Fonte: <%= meta.fonte %></span>
+        <span class="dash-badge green">✓ <%= meta.totalRegistros %> séries carregadas</span>
+        <span class="dash-badge gold">🗓️ Atualizado em <%= meta.atualizacao %></span>
+      </div>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- CONTROLES -->
+    <div class="controls-bar">
+      <span style="font-size:.8rem;color:#8b949e;font-weight:600">Visualizar:</span>
+      <button class="ctrl-btn active" onclick="setView('todos')">Todos</button>
+      <button class="ctrl-btn" onclick="setView('regional')">Regional</button>
+      <button class="ctrl-btn" onclick="setView('mercado')">Mercado</button>
+      <button class="ctrl-btn" onclick="setView('enade')">ENADE</button>
+      <div style="margin-left:auto;display:flex;gap:.5rem">
+        <button class="ctrl-btn" onclick="exportarDados()">⬇ Exportar JSON</button>
+        <button class="ctrl-btn danger" onclick="limparCache()">↺ Atualizar dados</button>
+      </div>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid">
+      <div class="kpi-card" style="--kpi-color:#58a6ff">
+        <div class="kpi-icon">🎓</div>
+        <div class="kpi-value"><%= kpis.totalMatriculas %></div>
+        <div class="kpi-label">Matrículas em TI (2022)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#3fb950">
+        <div class="kpi-icon">🏫</div>
+        <div class="kpi-value"><%= kpis.totalCursos %></div>
+        <div class="kpi-label">Cursos ativos no Brasil</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#d2993a">
+        <div class="kpi-icon">💼</div>
+        <div class="kpi-value"><%= kpis.saldoEmprego %></div>
+        <div class="kpi-label">Saldo de empregos TI (2023)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#c084fc">
+        <div class="kpi-icon">🏆</div>
+        <div class="kpi-value"><%= kpis.maiorRegiao %></div>
+        <div class="kpi-label">Região líder em matrículas</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#39d1c5">
+        <div class="kpi-icon">📈</div>
+        <div class="kpi-value">+8,5%</div>
+        <div class="kpi-label">Variação matrículas vs 2021</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#f78166">
+        <div class="kpi-icon">📋</div>
+        <div class="kpi-value">42,8</div>
+        <div class="kpi-label">Nota média ENADE — Eng. Comp.</div>
+      </div>
+    </div>
+
+    <!-- LINHA 1: Evolução + Matrículas por Região -->
+    <div class="chart-grid" id="view-todos">
+
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-card-title">Evolução de Cursos de TI (2018–2023)</div>
+            <div class="chart-card-sub">Matrículas e concluintes — série histórica</div>
+          </div>
+          <div class="chart-source">Censo Ed. Superior · INEP</div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart-evolucao"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-card-title">Matrículas por Região</div>
+            <div class="chart-card-sub">Distribuição geográfica dos estudantes de TI</div>
+          </div>
+          <div class="chart-source">Censo Ed. Superior 2022 · INEP</div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart-regiao"></canvas>
+        </div>
+      </div>
+
+      <!-- LINHA 2: Saldo de empregos -->
+      <div class="chart-card" style="grid-column: 1 / -1">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-card-title">Saldo de Empregos em TI — 2023 (Admissões − Desligamentos)</div>
+            <div class="chart-card-sub">Dados mensais do CAGED — Cadastro Geral de Empregados e Desempregados</div>
+          </div>
+          <div class="chart-source">CAGED · MTE 2023</div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart-mercado" style="max-height:220px"></canvas>
+        </div>
+      </div>
+
+      <!-- LINHA 3: Notas ENADE + Top UFs -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-card-title">Notas ENADE 2021 por Área de TI</div>
+            <div class="chart-card-sub">Média nacional por curso — escala 0 a 100</div>
+          </div>
+          <div class="chart-source">Microdados ENADE 2021 · INEP</div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart-enade"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-card-title">Top 10 UFs — Vagas em TI</div>
+            <div class="chart-card-sub">Estados com maior oferta de vagas em cursos de TI</div>
+          </div>
+          <div class="chart-source">e-MEC · Cadastro Nacional IES</div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart-ufs"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TABELA DE DADOS BRUTOS -->
+    <div class="data-section">
+      <h2>📋 Dados brutos — Matrículas por região</h2>
+      <div class="table-wrap">
+        <table class="data-table" id="tabela-dados">
+          <thead>
+            <tr>
+              <th>Região</th>
+              <th>Matrículas</th>
+              <th>Cursos</th>
+              <th>IES</th>
+              <th>Variação anual</th>
+              <th>Part. nacional</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-regiao"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- NOTA METODOLÓGICA -->
+    <div class="nota-metodologica">
+      <strong>📚 Nota metodológica e fontes</strong><br>
+      Os dados exibidos neste dashboard são provenientes de fontes abertas do Governo Federal Brasileiro:
+      <strong>INEP</strong> (Censo da Educação Superior 2022, Microdados ENADE 2021),
+      <strong>MTE/CAGED</strong> (Cadastro Geral de Empregados e Desempregados 2023) e
+      <strong>e-MEC</strong> (Cadastro Nacional de Cursos e IES).
+      Todos disponíveis em <a href="https://dados.gov.br" target="_blank" style="color:#58a6ff">dados.gov.br</a>.
+      Os dados são armazenados em cache local (tabela <code>cache_dados</code>) com validade de 24h
+      para não sobrecarregar as APIs públicas — padrão recomendado para sistemas que consomem dados massivos.
+    </div>
+
+  </main>
+
+  <%- include('partials/footer') %>
+
+  <script>
+  // ── Dados injetados pelo Controller (server-side) ──────────
+  const DS = {
+    matriculas: <%- json.matriculasPorRegiao %>,
+    evolucao  : <%- json.evolucaoTI %>,
+    enade     : <%- json.notasEnade %>,
+    mercado   : <%- json.mercadoTI %>,
+    ufs       : <%- json.vagasPorUF %>,
+  };
+
+  // ── Paleta ─────────────────────────────────────────────────
+  const CORES = {
+    azul  : '#58A6FF',
+    verde : '#3FB950',
+    dourado:'#D2993A',
+    violeta:'#C084FC',
+    teal  : '#39D1C5',
+    coral : '#F78166',
+    branco: '#F0F6FC',
+    fundo : '#161B22',
+    borda : '#30363D',
+  };
+
+  Chart.defaults.color          = '#8B949E';
+  Chart.defaults.borderColor    = '#30363D';
+  Chart.defaults.font.family    = "system-ui, -apple-system, sans-serif";
+  Chart.defaults.font.size      = 12;
+  Chart.defaults.plugins.legend.labels.boxWidth = 12;
+
+  const tooltipStyle = {
+    backgroundColor : '#21262D',
+    borderColor     : '#30363D',
+    borderWidth     : 1,
+    titleColor      : '#F0F6FC',
+    bodyColor       : '#8B949E',
+    padding         : 10,
+  };
+
+  // ── 1. Gráfico de evolução (linha dupla) ───────────────────
+  new Chart(document.getElementById('chart-evolucao'), {
+    type: 'line',
+    data: {
+      labels: DS.evolucao.map(d => d.ano),
+      datasets: [
+        {
+          label         : 'Matrículas',
+          data          : DS.evolucao.map(d => d.matriculas),
+          borderColor   : CORES.azul,
+          backgroundColor: 'rgba(88,166,255,0.1)',
+          tension       : 0.35,
+          fill          : true,
+          pointRadius   : 4,
+          yAxisID       : 'y',
+        },
+        {
+          label         : 'Concluintes',
+          data          : DS.evolucao.map(d => d.concluintes),
+          borderColor   : CORES.verde,
+          backgroundColor: 'rgba(63,185,80,0.1)',
+          tension       : 0.35,
+          fill          : true,
+          pointRadius   : 4,
+          yAxisID       : 'y',
+        },
+        {
+          label         : 'Docentes',
+          data          : DS.evolucao.map(d => d.docentes),
+          borderColor   : CORES.dourado,
+          borderDash    : [5, 3],
+          tension       : 0.35,
+          fill          : false,
+          pointRadius   : 3,
+          yAxisID       : 'y1',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { tooltip: tooltipStyle },
+      scales: {
+        y  : { position: 'left',  grid: { color: '#21262D' }, ticks: { callback: v => (v/1000).toFixed(0)+'k' } },
+        y1 : { position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: v => (v/1000).toFixed(0)+'k' } },
+      },
+    },
+  });
+
+  // ── 2. Gráfico de região (barra horizontal) ────────────────
+  new Chart(document.getElementById('chart-regiao'), {
+    type: 'bar',
+    data: {
+      labels  : DS.matriculas.map(d => d.regiao),
+      datasets: [{
+        label          : 'Matrículas',
+        data           : DS.matriculas.map(d => d.matriculas),
+        backgroundColor: [CORES.azul, CORES.teal, CORES.verde, CORES.dourado, CORES.violeta],
+        borderRadius   : 5,
+      }],
+    },
+    options: {
+      indexAxis : 'y',
+      responsive: true,
+      plugins   : {
+        legend : { display: false },
+        tooltip: { ...tooltipStyle, callbacks: {
+          label: ctx => ' ' + ctx.raw.toLocaleString('pt-BR') + ' matrículas',
+        }},
+      },
+      scales: {
+        x: { grid: { color: '#21262D' }, ticks: { callback: v => (v/1000).toFixed(0)+'k' } },
+        y: { grid: { color: '#21262D' } },
+      },
+    },
+  });
+
+  // ── 3. Saldo de empregos (barras + linha) ──────────────────
+  new Chart(document.getElementById('chart-mercado'), {
+    type: 'bar',
+    data: {
+      labels  : DS.mercado.map(d => d.mes),
+      datasets: [
+        {
+          label          : 'Admissões',
+          data           : DS.mercado.map(d => d.admissoes),
+          backgroundColor: 'rgba(63,185,80,0.65)',
+          borderRadius   : 3,
+        },
+        {
+          label          : 'Desligamentos',
+          data           : DS.mercado.map(d => -d.desligamentos),
+          backgroundColor: 'rgba(247,129,102,0.65)',
+          borderRadius   : 3,
+        },
+        {
+          type           : 'line',
+          label          : 'Saldo',
+          data           : DS.mercado.map(d => d.saldo),
+          borderColor    : CORES.dourado,
+          backgroundColor: 'rgba(210,153,34,0.1)',
+          tension        : 0.3,
+          pointRadius    : 4,
+          fill           : false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins   : { tooltip: tooltipStyle },
+      scales    : {
+        x: { stacked: true, grid: { color: '#21262D' } },
+        y: { stacked: true, grid: { color: '#21262D' }, ticks: { callback: v => (v/1000).toFixed(0)+'k' } },
+      },
+    },
+  });
+
+  // ── 4. Notas ENADE (radar) ─────────────────────────────────
+  new Chart(document.getElementById('chart-enade'), {
+    type: 'radar',
+    data: {
+      labels: DS.enade.map(d => d.area),
+      datasets: [
+        {
+          label          : 'Nota média',
+          data           : DS.enade.map(d => d.media),
+          borderColor    : CORES.violeta,
+          backgroundColor: 'rgba(192,132,252,0.18)',
+          pointBackgroundColor: CORES.violeta,
+          pointRadius    : 4,
+        },
+        {
+          label          : 'Desv. padrão',
+          data           : DS.enade.map(d => d.desvio),
+          borderColor    : CORES.teal,
+          backgroundColor: 'rgba(57,209,197,0.1)',
+          borderDash     : [4,3],
+          pointRadius    : 3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins   : { tooltip: tooltipStyle },
+      scales    : {
+        r: {
+          grid           : { color: '#21262D' },
+          angleLines     : { color: '#21262D' },
+          pointLabels    : { font: { size: 10 }, color: '#8B949E' },
+          ticks          : { backdropColor: 'transparent', stepSize: 10 },
+          min: 0, max: 60,
+        },
+      },
+    },
+  });
+
+  // ── 5. Top UFs (doughnut + legenda customizada) ────────────
+  const coresPaleta = [
+    CORES.azul, CORES.teal, CORES.verde, CORES.dourado,
+    CORES.violeta, CORES.coral, '#7EE8FA', '#EEB2A2',
+    '#A8E6CF', '#FFD3B6',
+  ];
+  new Chart(document.getElementById('chart-ufs'), {
+    type: 'doughnut',
+    data: {
+      labels: DS.ufs.map(d => d.uf),
+      datasets: [{
+        data           : DS.ufs.map(d => d.vagas),
+        backgroundColor: coresPaleta,
+        borderColor    : CORES.fundo,
+        borderWidth    : 2,
+        hoverOffset    : 8,
+      }],
+    },
+    options: {
+      responsive : true,
+      cutout     : '62%',
+      plugins    : {
+        legend : { position: 'right', labels: { padding: 12, usePointStyle: true } },
+        tooltip: { ...tooltipStyle, callbacks: {
+          label: ctx => ` ${ctx.label}: ${ctx.raw.toLocaleString('pt-BR')} vagas`,
+        }},
+      },
+    },
+  });
+
+  // ── Tabela de matrículas por região ───────────────────────
+  const total = DS.matriculas.reduce((s, r) => s + r.matriculas, 0);
+  const tbody = document.getElementById('tbody-regiao');
+  DS.matriculas.forEach(r => {
+    const pct = ((r.matriculas / total) * 100).toFixed(1);
+    const bar = `<div style="width:${pct}%;height:4px;background:#58a6ff;border-radius:2px"></div>`;
+    tbody.innerHTML += `
+      <tr>
+        <td><strong>${r.regiao}</strong></td>
+        <td>${r.matriculas.toLocaleString('pt-BR')}</td>
+        <td>${r.cursos.toLocaleString('pt-BR')}</td>
+        <td>${r.ies}</td>
+        <td style="color:${r.variacao > 5 ? '#3fb950':'#58a6ff'}">+${r.variacao}%</td>
+        <td>${pct}% ${bar}</td>
+      </tr>`;
+  });
+
+  // ── Filtros de visualização ────────────────────────────────
+  function setView(v) {
+    document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    // Scroll suave para seção relevante
+    const ids = { regional: 'chart-regiao', mercado: 'chart-mercado', enade: 'chart-enade' };
+    if (ids[v]) document.getElementById(ids[v]).closest('.chart-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // ── Exportar JSON ─────────────────────────────────────────
+  function exportarDados() {
+    const payload = JSON.stringify(DS, null, 2);
+    const blob = new Blob([payload], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: `simec-dados-abertos-${new Date().toISOString().slice(0,10)}.json`,
+    });
+    a.click();
+  }
+
+  // ── Limpar cache ──────────────────────────────────────────
+  async function limparCache() {
+    if (!confirm('Forçar atualização dos dados externos? Pode levar alguns segundos.')) return;
+    const btn = event.target;
+    btn.textContent = '⏳ Atualizando...';
+    btn.disabled = true;
+    try {
+      const r = await fetch('/dashboard/cache/limpar', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': '<%= csrfToken %>' }
+      });
+      const j = await r.json();
+      alert(j.mensagem || 'Cache limpo! Recarregue a página.');
+      window.location.reload();
+    } catch {
+      alert('Erro ao limpar cache.');
+      btn.textContent = '↺ Atualizar dados';
+      btn.disabled = false;
+    }
+  }
+  </script>
+</body>
+</html>
